@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CIDR Divider</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --border: #475569;
+    --network: #38bdf8;   /* sky blue */
+    --host: #fb7185;      /* rose */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+  }
+  h1 {
+    margin: 0 0 4px;
+    font-size: 24px;
+  }
+  .subtitle {
+    color: var(--muted);
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+  .container {
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+  .controls {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .control {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  label {
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .ip-row {
+    display: flex;
+    gap: 8px;
+  }
+  input[type="text"] {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 14px;
+  }
+  .btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .btn:hover {
+    background: var(--panel-2);
+    border-color: var(--accent);
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  .slider-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .slider-value {
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 16px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .stat-value {
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .visual {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .legend {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .legend-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  /* 32 bit blocks split into 4 octet groups */
+  .bits {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .octet {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .octet-bits {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 3px;
+  }
+  .bit {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-family: "SF Mono", Monaco, monospace;
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--text);
+    position: relative;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+  }
+  .bit .bit-pos {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 8px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 0;
+  }
+  .bit .bit-weight {
+    font-size: 8px;
+    font-weight: 400;
+    opacity: 0.75;
+    margin-top: -2px;
+  }
+  .bit.network {
+    background: color-mix(in srgb, var(--network) 25%, var(--bg));
+    border-color: var(--network);
+    color: #f0faff;
+  }
+  .bit.host {
+    background: color-mix(in srgb, var(--host) 22%, var(--bg));
+    border-color: var(--host);
+    color: #fff5f6;
+  }
+  .bit:hover {
+    transform: translateY(-1px);
+  }
+  .octet-meta {
+    display: flex;
+    justify-content: space-between;
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .octet-meta .dec { color: var(--text); font-weight: 600; }
+
+  /* Boundary marker between network and host portions */
+  .boundary {
+    margin-top: 16px;
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(to right,
+      var(--network) 0% var(--boundary, 50%),
+      var(--host) var(--boundary, 50%) 100%);
+    position: relative;
+  }
+  .boundary-marker {
+    position: absolute;
+    top: -4px;
+    width: 2px;
+    height: 14px;
+    background: var(--text);
+    transform: translateX(-50%);
+    left: var(--boundary, 50%);
+  }
+  .boundary-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: "SF Mono", Monaco, monospace;
+  }
+  .boundary-labels span strong { color: var(--text); font-weight: 600; }
+  .error {
+    color: #f87171;
+    font-size: 13px;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>CIDR Divider</h1>
+  <div class="subtitle">Watch the prefix length split an IPv4 address into its network and host portions, bit by bit.</div>
+
+  <div class="controls">
+    <div class="control">
+      <label for="ip">IPv4 Address</label>
+      <div class="ip-row">
+        <input type="text" id="ip" value="192.168.1.42" />
+        <button type="button" class="btn" id="randomBtn">Random</button>
+      </div>
+      <div class="error" id="error"></div>
+    </div>
+    <div class="control">
+      <label for="slider">Subnet Prefix Length</label>
+      <div class="slider-row">
+        <span style="color:var(--muted);font-size:12px;">/0</span>
+        <span class="slider-value" id="prefixValue">/24</span>
+        <span style="color:var(--muted);font-size:12px;">/32</span>
+      </div>
+      <input type="range" id="slider" min="0" max="32" value="24" />
+      <div style="color:var(--muted);font-size:12px;" id="maskDisplay">Mask: 255.255.255.0</div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">CIDR</div>
+      <div class="stat-value" id="statCidr">192.168.1.42/24</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Network Address</div>
+      <div class="stat-value" id="statNetwork">192.168.1.0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Broadcast</div>
+      <div class="stat-value" id="statBroadcast">192.168.1.255</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Host Bits</div>
+      <div class="stat-value" id="statHost">8</div>
+    </div>
+  </div>
+
+  <div class="visual">
+    <div class="legend">
+      <span><span class="legend-swatch" style="background: var(--network)"></span>Network portion</span>
+      <span><span class="legend-swatch" style="background: var(--host)"></span>Host portion</span>
+      <span style="margin-left:auto;font-family:'SF Mono',Monaco,monospace;">Bits are MSB → LSB, octet 1 to octet 4</span>
+    </div>
+
+    <div class="bits" id="bits"></div>
+
+    <div class="boundary" id="boundary"><div class="boundary-marker" id="boundaryMarker"></div></div>
+    <div class="boundary-labels">
+      <span><strong id="netBits">24</strong> network bits</span>
+      <span><strong id="hostBits">8</strong> host bits</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const ipInput = document.getElementById('ip');
+  const slider = document.getElementById('slider');
+  const prefixValue = document.getElementById('prefixValue');
+  const maskDisplay = document.getElementById('maskDisplay');
+  const randomBtn = document.getElementById('randomBtn');
+  const errorEl = document.getElementById('error');
+  const bitsEl = document.getElementById('bits');
+  const boundary = document.getElementById('boundary');
+  const boundaryMarker = document.getElementById('boundaryMarker');
+  const netBitsEl = document.getElementById('netBits');
+  const hostBitsEl = document.getElementById('hostBits');
+  const statCidr = document.getElementById('statCidr');
+  const statNetwork = document.getElementById('statNetwork');
+  const statBroadcast = document.getElementById('statBroadcast');
+  const statHost = document.getElementById('statHost');
+
+  function parseIp(str) {
+    const m = /^\s*(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\s*$/.exec(str);
+    if (!m) return null;
+    const o = [m[1], m[2], m[3], m[4]].map(Number);
+    if (o.some(v => v < 0 || v > 255)) return null;
+    return ((o[0] << 24) >>> 0) + (o[1] << 16) + (o[2] << 8) + o[3];
+  }
+
+  function intToIp(n) {
+    return [
+      (n >>> 24) & 0xff,
+      (n >>> 16) & 0xff,
+      (n >>> 8) & 0xff,
+      n & 0xff
+    ].join('.');
+  }
+
+  function randomIp() {
+    // Avoid 0.x, 127.x, 224+ (multicast/reserved), and 255 broadcast.
+    let a;
+    do { a = 1 + Math.floor(Math.random() * 222); }
+    while (a === 127 || a === 10 || a === 172 || a === 192);
+    // Allow private ranges occasionally
+    if (Math.random() < 0.25) {
+      const pick = Math.floor(Math.random() * 3);
+      if (pick === 0) a = 10;
+      else if (pick === 1) a = 172;
+      else a = 192;
+    }
+    let b = Math.floor(Math.random() * 256);
+    if (a === 172) b = 16 + Math.floor(Math.random() * 16);
+    if (a === 192) b = 168;
+    const c = Math.floor(Math.random() * 256);
+    const d = 1 + Math.floor(Math.random() * 253);
+    return `${a}.${b}.${c}.${d}`;
+  }
+
+  // Build the 32 bit cells once
+  function buildBits() {
+    bitsEl.innerHTML = '';
+    for (let octet = 0; octet < 4; octet++) {
+      const oc = document.createElement('div');
+      oc.className = 'octet';
+      const grid = document.createElement('div');
+      grid.className = 'octet-bits';
+      for (let i = 0; i < 8; i++) {
+        const bitIndex = octet * 8 + i;       // 0..31, MSB first
+        const weight = 1 << (7 - i);           // 128..1 within octet
+        const cell = document.createElement('div');
+        cell.className = 'bit';
+        cell.dataset.index = bitIndex;
+        cell.innerHTML =
+          `<span class="bit-pos">${bitIndex + 1}</span>` +
+          `<span class="bit-val">0</span>` +
+          `<span class="bit-weight">${weight}</span>`;
+        grid.appendChild(cell);
+      }
+      const meta = document.createElement('div');
+      meta.className = 'octet-meta';
+      meta.innerHTML =
+        `<span>Octet ${octet + 1}</span>` +
+        `<span class="dec" data-octet="${octet}">0</span>`;
+      oc.appendChild(grid);
+      oc.appendChild(meta);
+      bitsEl.appendChild(oc);
+    }
+  }
+
+  function render() {
+    errorEl.textContent = '';
+    const ip = parseIp(ipInput.value);
+    if (ip === null) {
+      errorEl.textContent = 'Invalid IPv4 address (e.g. 192.168.1.42)';
+      return;
+    }
+    const prefix = Number(slider.value);
+    prefixValue.textContent = '/' + prefix;
+    const mask = prefix === 0 ? 0 : (0xFFFFFFFF << (32 - prefix)) >>> 0;
+    const network = (ip & mask) >>> 0;
+    const broadcast = (network | (~mask >>> 0)) >>> 0;
+    maskDisplay.textContent = 'Mask: ' + intToIp(mask);
+
+    statCidr.textContent = intToIp(ip) + '/' + prefix;
+    statNetwork.textContent = intToIp(network);
+    statBroadcast.textContent = intToIp(broadcast);
+    statHost.textContent = (32 - prefix);
+    netBitsEl.textContent = prefix;
+    hostBitsEl.textContent = 32 - prefix;
+
+    // Boundary line position (% of width). Marker at prefix/32.
+    const pct = (prefix / 32) * 100;
+    boundary.style.setProperty('--boundary', pct + '%');
+
+    // Update bit cells
+    const cells = bitsEl.querySelectorAll('.bit');
+    cells.forEach((cell, i) => {
+      const bit = (ip >>> (31 - i)) & 1;
+      cell.querySelector('.bit-val').textContent = bit;
+      cell.classList.remove('network', 'host');
+      cell.classList.add(i < prefix ? 'network' : 'host');
+    });
+    // Octet decimal labels
+    bitsEl.querySelectorAll('[data-octet]').forEach((el) => {
+      const o = Number(el.dataset.octet);
+      el.textContent = (ip >>> ((3 - o) * 8)) & 0xff;
+    });
+  }
+
+  buildBits();
+
+  ipInput.addEventListener('input', render);
+  slider.addEventListener('input', render);
+  randomBtn.addEventListener('click', () => {
+    ipInput.value = randomIp();
+    render();
+  });
+
+  // Random IP on startup
+  ipInput.value = randomIp();
+  render();
+})();
+</script>
+</body>
+</html>
