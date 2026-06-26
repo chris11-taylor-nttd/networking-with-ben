@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IP Subnet Visualizer</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --border: #475569;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+  }
+  h1 {
+    margin: 0 0 4px;
+    font-size: 24px;
+  }
+  .subtitle {
+    color: var(--muted);
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+  .container {
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+  .controls {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .control {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  label {
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 14px;
+  }
+  .presets {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .preset-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .preset-btn:hover {
+    background: var(--panel-2);
+    border-color: var(--accent);
+  }
+  .preset-btn .preset-label {
+    color: var(--muted);
+    margin-right: 6px;
+    font-size: 11px;
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  .slider-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .slider-value {
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 16px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .stat-value {
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .visual {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  canvas#grid {
+    display: block;
+    margin: 0 auto;
+    background: #0b1220;
+    border-radius: 4px;
+    cursor: crosshair;
+    image-rendering: pixelated;
+  }
+  .error {
+    color: #f87171;
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  .legend {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+  #tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: rgba(15, 23, 42, 0.97);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 12px;
+    color: var(--text);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    z-index: 100;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+  #tooltip.visible { opacity: 1; }
+  #tooltip .tt-cidr { color: var(--accent); font-weight: 700; margin-bottom: 4px; }
+  #tooltip .tt-row { color: var(--muted); font-size: 11px; }
+  #tooltip .tt-row span { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>IP Subnet Visualizer</h1>
+  <div class="subtitle">Drag the slider to carve a network into equally-sized subnets.</div>
+
+  <div class="controls">
+    <div class="control">
+      <label for="network">Base Network (CIDR)</label>
+      <input type="text" id="network" value="192.168.1.0/24" />
+      <div class="presets" id="presets">
+        <button type="button" class="preset-btn" data-cidr="10.0.0.0/8"><span class="preset-label">Class A</span>10.0.0.0/8</button>
+        <button type="button" class="preset-btn" data-cidr="172.16.0.0/12"><span class="preset-label">Class B</span>172.16.0.0/12</button>
+        <button type="button" class="preset-btn" data-cidr="192.168.0.0/16"><span class="preset-label">Class C</span>192.168.0.0/16</button>
+      </div>
+      <div class="error" id="error"></div>
+    </div>
+    <div class="control">
+      <label for="slider">Subnet Prefix Length</label>
+      <div class="slider-row">
+        <span style="color:var(--muted);font-size:12px;" id="minLabel">/24</span>
+        <span class="slider-value" id="prefixValue">/24</span>
+        <span style="color:var(--muted);font-size:12px;">/32</span>
+      </div>
+      <input type="range" id="slider" min="8" max="32" value="24" />
+      <div style="color:var(--muted);font-size:12px;" id="subnetCount">1 subnet</div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Base Network</div>
+      <div class="stat-value" id="statNetwork">192.168.1.0/24</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Total Addresses</div>
+      <div class="stat-value" id="statTotal">256</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Subnets</div>
+      <div class="stat-value" id="statSubnets">1</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Hosts / Subnet</div>
+      <div class="stat-value" id="statHosts">254</div>
+    </div>
+  </div>
+
+  <div class="visual">
+    <div class="legend">Each block is one subnet, ordered along a Hilbert curve so neighboring subnets stay adjacent. Hover for details.</div>
+    <canvas id="grid" width="600" height="600"></canvas>
+  </div>
+</div>
+<div id="tooltip"></div>
+
+<script>
+(function () {
+  const networkInput = document.getElementById('network');
+  const slider = document.getElementById('slider');
+  const prefixValue = document.getElementById('prefixValue');
+  const subnetCount = document.getElementById('subnetCount');
+  const grid = document.getElementById('grid');
+  const ctx = grid.getContext('2d');
+  const errorEl = document.getElementById('error');
+  const minLabel = document.getElementById('minLabel');
+  const statNetwork = document.getElementById('statNetwork');
+  const statTotal = document.getElementById('statTotal');
+  const statSubnets = document.getElementById('statSubnets');
+  const statHosts = document.getElementById('statHosts');
+
+  // Cached layout for hover
+  let layout = null;
+
+  function parseCIDR(str) {
+    const m = /^\s*(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})\s*$/.exec(str);
+    if (!m) return null;
+    const octets = [m[1], m[2], m[3], m[4]].map(Number);
+    const prefix = Number(m[5]);
+    if (octets.some(o => o < 0 || o > 255)) return null;
+    if (prefix < 0 || prefix > 32) return null;
+    const addr = (octets[0] << 24 >>> 0) + (octets[1] << 16) + (octets[2] << 8) + octets[3];
+    // Normalize to network address
+    const mask = prefix === 0 ? 0 : (0xFFFFFFFF << (32 - prefix)) >>> 0;
+    const network = (addr & mask) >>> 0;
+    return { network, prefix };
+  }
+
+  function intToIp(n) {
+    return [
+      (n >>> 24) & 0xff,
+      (n >>> 16) & 0xff,
+      (n >>> 8) & 0xff,
+      n & 0xff
+    ].join('.');
+  }
+
+  function fmt(n) {
+    return n.toLocaleString();
+  }
+
+  // HSL color spread for visual distinction
+  function colorFor(i, total) {
+    const hue = (i * 360 / Math.max(total, 1)) % 360;
+    return `hsl(${hue}, 65%, 45%)`;
+  }
+
+  // Generalized Hilbert curve (gilbert) — fills any w x h rectangle with a
+  // pseudo-Hilbert space-filling curve so that consecutive indices stay
+  // spatially adjacent. Returns an array of [x,y] of length w*h.
+  // Adapted from Jakub Cerveny's `gilbert` algorithm.
+  function gilbert(w, h) {
+    const out = new Array(w * h);
+    let idx = 0;
+    const sign = (n) => (n > 0) - (n < 0);
+    function gen(x, y, ax, ay, bx, by) {
+      const wAbs = Math.abs(ax) + Math.abs(ay);
+      const hAbs = Math.abs(bx) + Math.abs(by);
+      const dax = sign(ax), day = sign(ay);
+      const dbx = sign(bx), dby = sign(by);
+      if (hAbs === 1) {
+        for (let i = 0; i < wAbs; i++) { out[idx++] = [x, y]; x += dax; y += day; }
+        return;
+      }
+      if (wAbs === 1) {
+        for (let i = 0; i < hAbs; i++) { out[idx++] = [x, y]; x += dbx; y += dby; }
+        return;
+      }
+      let ax2 = (ax / 2) | 0, ay2 = (ay / 2) | 0;
+      let bx2 = (bx / 2) | 0, by2 = (by / 2) | 0;
+      const w2 = Math.abs(ax2) + Math.abs(ay2);
+      const h2 = Math.abs(bx2) + Math.abs(by2);
+      if (2 * wAbs > 3 * hAbs) {
+        if ((w2 & 1) && wAbs > 2) { ax2 += dax; ay2 += day; }
+        gen(x, y, ax2, ay2, bx, by);
+        gen(x + ax2, y + ay2, ax - ax2, ay - ay2, bx, by);
+      } else {
+        if ((h2 & 1) && hAbs > 2) { bx2 += dbx; by2 += dby; }
+        gen(x, y, bx2, by2, ax2, ay2);
+        gen(x + bx2, y + by2, ax, ay, bx - bx2, by - by2);
+        gen(x + (ax - dax) + (bx2 - dbx),
+            y + (ay - day) + (by2 - dby),
+            -bx2, -by2, -(ax - ax2), -(ay - ay2));
+      }
+    }
+    if (w >= h) gen(0, 0, w, 0, 0, h);
+    else gen(0, 0, 0, h, w, 0);
+    return out;
+  }
+
+  // Cache curves by (w,h) since they are expensive for large grids
+  const curveCache = new Map();
+  function getCurve(w, h) {
+    const key = w + 'x' + h;
+    let c = curveCache.get(key);
+    if (!c) {
+      c = gilbert(w, h);
+      // Also build inverse index: y*w + x -> i
+      const inv = new Int32Array(w * h);
+      for (let i = 0; i < c.length; i++) {
+        const [x, y] = c[i];
+        inv[y * w + x] = i;
+      }
+      c.inv = inv;
+      curveCache.set(key, c);
+    }
+    return c;
+  }
+
+  function render() {
+    errorEl.textContent = '';
+    const parsed = parseCIDR(networkInput.value);
+    if (!parsed) {
+      errorEl.textContent = 'Invalid CIDR notation (e.g. 10.0.0.0/16)';
+      return;
+    }
+    const { network, prefix: basePrefix } = parsed;
+
+    // Size the canvas to the largest square that fits in the available viewport.
+    const visual = grid.parentElement;
+    const visualStyle = getComputedStyle(visual);
+    const padX = parseFloat(visualStyle.paddingLeft) + parseFloat(visualStyle.paddingRight);
+    const availW = visual.clientWidth - padX;
+    const gridTop = grid.getBoundingClientRect().top;
+    const bottomReserve = 60; // panel bottom padding + page padding
+    const availH = window.innerHeight - gridTop - bottomReserve;
+    const side = Math.max(200, Math.floor(Math.min(availW, availH)));
+    const dpr = window.devicePixelRatio || 1;
+    grid.style.width = side + 'px';
+    grid.style.height = side + 'px';
+    grid.width = side * dpr;
+    grid.height = side * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // Clamp slider min to base prefix
+    slider.min = basePrefix;
+    minLabel.textContent = '/' + basePrefix;
+    let subnetPrefix = Number(slider.value);
+    if (subnetPrefix < basePrefix) {
+      subnetPrefix = basePrefix;
+      slider.value = subnetPrefix;
+    }
+
+    const bits = subnetPrefix - basePrefix;
+    const numSubnets = Math.pow(2, bits);
+    const subnetSize = subnetPrefix === 32 ? 1 : Math.pow(2, 32 - subnetPrefix);
+    const totalAddrs = basePrefix === 32 ? 1 : Math.pow(2, 32 - basePrefix);
+    const usableHosts = subnetPrefix >= 31 ? (subnetPrefix === 32 ? 1 : 2) : subnetSize - 2;
+
+    prefixValue.textContent = '/' + subnetPrefix;
+    subnetCount.textContent = fmt(numSubnets) + ' subnet' + (numSubnets === 1 ? '' : 's');
+    statNetwork.textContent = intToIp(network) + '/' + basePrefix;
+    statTotal.textContent = fmt(totalAddrs);
+    statSubnets.textContent = fmt(numSubnets);
+    statHosts.textContent = fmt(usableHosts);
+
+    // Pick cols/rows whose product equals numSubnets exactly (numSubnets is
+    // a power of 2): square if n even, 2:1 if n odd.
+    const n = Math.log2(numSubnets);
+    const rExp = Math.floor(n / 2);
+    const cExp = n - rExp;
+    const cols = 1 << cExp;
+    const rows = 1 << rExp;
+    const cellW = side / cols;
+    const cellH = side / rows;
+    const cellMin = Math.min(cellW, cellH);
+
+    // Compute Hilbert ordering once per (cols, rows) — cached.
+    const curve = getCurve(cols, rows);
+
+    // Paint
+    ctx.clearRect(0, 0, side, side);
+    for (let i = 0; i < numSubnets; i++) {
+      const [gx, gy] = curve[i];
+      ctx.fillStyle = colorFor(i, numSubnets);
+      // Draw with a 1px inset gap so cells read as distinct when large enough.
+      const inset = cellMin >= 4 ? 1 : 0;
+      ctx.fillRect(gx * cellW + inset, gy * cellH + inset,
+                   Math.max(0.5, cellW - inset * 2),
+                   Math.max(0.5, cellH - inset * 2));
+    }
+
+    // Label cells when they're large enough and few enough to read.
+    if (cellMin >= 40 && numSubnets <= 16) {
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 2;
+      const fontSize = cellMin >= 80 ? 13 : (cellMin >= 60 ? 12 : 10);
+      ctx.font = `600 ${fontSize}px "SF Mono", Monaco, monospace`;
+      const lineH = fontSize + 2;
+      for (let i = 0; i < numSubnets; i++) {
+        const [gx, gy] = curve[i];
+        const cx = gx * cellW + cellW / 2;
+        const cy = gy * cellH + cellH / 2;
+        const start = (network + i * subnetSize) >>> 0;
+        const cidr = intToIp(start) + '/' + subnetPrefix;
+        if (cellMin >= 80) {
+          const end = (start + subnetSize - 1) >>> 0;
+          ctx.fillText(cidr, cx, cy - lineH);
+          ctx.font = `${fontSize - 3}px "SF Mono", Monaco, monospace`;
+          ctx.fillText(`${intToIp(start)} – ${intToIp(end)}`, cx, cy);
+          ctx.fillText(`${fmt(usableHosts)} host${usableHosts === 1 ? '' : 's'}`, cx, cy + lineH);
+          ctx.font = `600 ${fontSize}px "SF Mono", Monaco, monospace`;
+        } else {
+          ctx.fillText(cidr, cx, cy);
+        }
+      }
+      ctx.shadowBlur = 0;
+    }
+
+    // Cache for hover
+    layout = { side, cols, rows, cellW, cellH, curve, network, subnetSize, subnetPrefix, usableHosts, numSubnets };
+  }
+
+  networkInput.addEventListener('input', render);
+  slider.addEventListener('input', render);
+  window.addEventListener('resize', render);
+
+  // Preset buttons
+  document.getElementById('presets').addEventListener('click', (e) => {
+    const btn = e.target.closest('.preset-btn');
+    if (!btn) return;
+    const cidr = btn.dataset.cidr;
+    networkInput.value = cidr;
+    // Match the slider to the preset's prefix length.
+    // Must lower slider.min first, otherwise the browser clamps the new value.
+    const m = /\/(\d+)$/.exec(cidr);
+    if (m) {
+      const p = Number(m[1]);
+      slider.min = p;
+      slider.value = p;
+    }
+    render();
+  });
+
+  // Custom tooltip
+  const tooltip = document.getElementById('tooltip');
+  function hideTooltip() { tooltip.classList.remove('visible'); }
+  function showTooltipAt(i, x, y) {
+    if (!layout) return;
+    const start = (layout.network + i * layout.subnetSize) >>> 0;
+    const end = (start + layout.subnetSize - 1) >>> 0;
+    const cidr = intToIp(start) + '/' + layout.subnetPrefix;
+    tooltip.innerHTML =
+      `<div class="tt-cidr">${cidr}</div>` +
+      `<div class="tt-row">Range: <span>${intToIp(start)} – ${intToIp(end)}</span></div>` +
+      `<div class="tt-row">Addresses: <span>${fmt(layout.subnetSize)}</span></div>` +
+      `<div class="tt-row">Usable hosts: <span>${fmt(layout.usableHosts)}</span></div>` +
+      `<div class="tt-row">Index: <span>#${fmt(i)} of ${fmt(layout.numSubnets)}</span></div>`;
+    tooltip.classList.add('visible');
+    const pad = 12;
+    const rect = tooltip.getBoundingClientRect();
+    let left = x + pad, top = y + pad;
+    if (left + rect.width > window.innerWidth - 4) left = x - rect.width - pad;
+    if (top + rect.height > window.innerHeight - 4) top = y - rect.height - pad;
+    tooltip.style.left = Math.max(4, left) + 'px';
+    tooltip.style.top = Math.max(4, top) + 'px';
+  }
+  grid.addEventListener('mousemove', (e) => {
+    if (!layout) return;
+    const r = grid.getBoundingClientRect();
+    const px = e.clientX - r.left;
+    const py = e.clientY - r.top;
+    const gx = Math.min(layout.cols - 1, Math.max(0, Math.floor(px / layout.cellW)));
+    const gy = Math.min(layout.rows - 1, Math.max(0, Math.floor(py / layout.cellH)));
+    const i = layout.curve.inv[gy * layout.cols + gx];
+    showTooltipAt(i, e.clientX, e.clientY);
+  });
+  grid.addEventListener('mouseleave', hideTooltip);
+
+  render();
+})();
+</script>
+</body>
+</html>
